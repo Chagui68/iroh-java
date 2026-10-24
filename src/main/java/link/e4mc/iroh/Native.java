@@ -8,6 +8,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
@@ -48,7 +49,10 @@ public class Native {
             if (!new File(libraryPath).isFile()) {
                 try {
                     URL url = new URL(System.getProperty("link.e4mc.dialtone.native_url", "https://github.com/Chagui68/iroh-java/releases/download/natives-" + NATIVES_TAG + "/" + fileName));
-                    ReadableByteChannel rbc = Channels.newChannel(url.openStream());
+                    URLConnection connection = url.openConnection();
+                    // GitHub release downloads answer Java's default Accept header with HTTP 406.
+                    connection.setRequestProperty("Accept", "application/octet-stream");
+                    ReadableByteChannel rbc = Channels.newChannel(connection.getInputStream());
                     FileOutputStream fos = new FileOutputStream(libraryPath);
                     fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
                     fos.close();
