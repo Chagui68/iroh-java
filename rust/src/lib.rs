@@ -8,6 +8,8 @@ use crossbeam_channel::Sender as MpscSender;
 use crossbeam_channel::unbounded as mpsc_channel;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
+use iroh::PublicKey;
+use iroh::SecretKey;
 use iroh::RelayMap;
 use iroh::RelayMode;
 use iroh::RelayUrl;
@@ -177,6 +179,7 @@ fn init_endpoint_bundle<'local>(
     bundle: JObject<'local>,
     alpns: JObjectArray<'local>,
     relays: JObjectArray<'local>,
+    secret_key: JByteArray<'local>,
 ) -> anyhow::Result<()> {
     let alpns_len = env.get_array_length(&alpns)?;
     let mut alpns_vec = Vec::with_capacity(alpns_len as usize);
@@ -199,13 +202,19 @@ fn init_endpoint_bundle<'local>(
     };
     let runtime = Arc::new(tokio::runtime::Runtime::new()?);
     // TODO: more comprehensive options for Endpoint configuration
-    let endpoint = runtime.block_on(
-        Endpoint::builder(presets::Minimal)
-            .relay_mode(relay_mode)
-            .alpns(alpns_vec)
-            .proxy_from_env()
-            .bind(),
-    )?;
+    // N0 publishes and resolves endpoint addresses through n0's DNS, so peers can connect by endpoint id alone.
+    let mut builder = Endpoint::builder(presets::N0)
+        .relay_mode(relay_mode)
+        .alpns(alpns_vec)
+        .proxy_from_env();
+    if !secret_key.is_null() {
+        let bytes: [u8; 32] = env
+            .convert_byte_array(secret_key)?
+            .try_into()
+            .map_err(|_| anyhow!("secret key must be 32 bytes"))?;
+        builder = builder.secret_key(SecretKey::from_bytes(&bytes));
+    }
+    let endpoint = runtime.block_on(builder.bind())?;
     let (sender, receiver) = mpsc_channel();
     let bundle_struct = EndpointBundle {
         runtime,
@@ -412,6 +421,18 @@ fn accept_endpoint_bundle<'local>(
     Ok(())
 }
 
+#[export(Java_link_e4mc_iroh_Native_idEndpointBundle)]
+fn id_endpoint_bundle<'local>(
+    env: &mut JNIEnv<'local>,
+    class: JClass<'local>,
+    bundle: JObject<'local>,
+) -> anyhow::Result<JByteArray<'local>> {
+    let bundle = unsafe { EndpointBundle::get_from_jobject(env, &bundle)? };
+    let id = *bundle.endpoint.id().as_bytes();
+    drop(bundle);
+    Ok(env.byte_array_from_slice(&id)?)
+}
+
 #[export(Java_link_e4mc_iroh_Native_connectEndpointBundle)]
 fn connect_endpoint_bundle<'local>(
     env: &mut JNIEnv<'local>,
@@ -428,7 +449,11 @@ fn connect_endpoint_bundle<'local>(
     };
     let alpn = env.convert_byte_array(alpn)?;
     let addr: String = env.get_string(&addr)?.into();
-    let addr: EndpointAddr = EndpointTicket::from_str(&addr)?.into();
+    // Either a full ticket, or a bare hex endpoint id resolved through address lookup.
+    let addr: EndpointAddr = match EndpointTicket::from_str(&addr) {
+        Ok(ticket) => ticket.into(),
+        Err(_) => EndpointAddr::new(PublicKey::from_str(&addr)?),
+    };
     bundle.runtime.clone().spawn(async move {
         match bundle.endpoint.connect(addr, &alpn).await {
             Ok(conn) => {

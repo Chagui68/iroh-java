@@ -13,7 +13,17 @@ public class Endpoint implements AutoCloseable {
     }
 
     public Endpoint(byte[][] alpns, String[] relays) {
-        Native.initEndpointBundle(this, alpns, relays);
+        this(alpns, relays, null);
+    }
+
+    /** @param secretKey 32-byte ed25519 secret key giving a stable endpoint id, or null for a random one */
+    public Endpoint(byte[][] alpns, String[] relays, byte[] secretKey) {
+        Native.initEndpointBundle(this, alpns, relays, secretKey);
+    }
+
+    /** The 32-byte endpoint id (public key). Peers can connect to its hex form via {@link #connect}. */
+    public byte[] id() {
+        return Native.idEndpointBundle(this);
     }
 
     public Runnable pollCallbackLoop() {

@@ -3,6 +3,7 @@ name: build natives
 on:
   push:
     branches: ["meower"]
+  workflow_dispatch:
 
 jobs:
   build:

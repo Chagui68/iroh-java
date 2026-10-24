@@ -48,3 +48,13 @@ if (hasProperty("skyevenToken")) {
         }
     }
 }
+// JitPack (https://jitpack.io) builds and serves this fork from its git tags.
+if (!hasProperty("skyevenToken")) {
+    publishing {
+        publications {
+            maven(MavenPublication) {
+                from components.java
+            }
+        }
+    }
+}

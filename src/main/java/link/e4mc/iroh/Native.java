@@ -18,6 +18,9 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 
 public class Native {
+    // Natives are built by CI and published as a GitHub release named natives-<tag>.
+    private static final String NATIVES_TAG = "offline1";
+
     static {
         loadNativeLibrary();
     }
@@ -26,7 +29,7 @@ public class Native {
         String libName = "iroh_java";
         libName += '_' + PlatformDependent.normalizedOs()
                 + '_' + PlatformDependent.normalizedArch()
-                + "_b296210";
+                + "_" + NATIVES_TAG;
 
         String libraryPath = System.getProperty("link.e4mc.dialtone.native_path");
         boolean downloaded = false;
@@ -44,7 +47,7 @@ public class Native {
             new File(folderPath).mkdirs();
             if (!new File(libraryPath).isFile()) {
                 try {
-                    URL url = new URL(System.getProperty("link.e4mc.dialtone.native_url", "https://natives.e4mc.link/" + fileName));
+                    URL url = new URL(System.getProperty("link.e4mc.dialtone.native_url", "https://github.com/Chagui68/iroh-java/releases/download/natives-" + NATIVES_TAG + "/" + fileName));
                     ReadableByteChannel rbc = Channels.newChannel(url.openStream());
                     FileOutputStream fos = new FileOutputStream(libraryPath);
                     fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
@@ -114,7 +117,8 @@ public class Native {
     }
 
     static native Object resolveDeferredInitializer(DeferredInitializer<?> deferredInitializer);
-    static native void initEndpointBundle(Endpoint bundle, byte[][] alpns, String[] relays);
+    static native void initEndpointBundle(Endpoint bundle, byte[][] alpns, String[] relays, byte[] secretKey);
+    static native byte[] idEndpointBundle(Endpoint bundle);
     static native void freeEndpointBundle(Endpoint bundle);
     static native Runnable pollEndpointBundle(Endpoint bundle);
     static native String addrEndpointBundle(Endpoint bundle);
